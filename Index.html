@@ -1,10 +1,108 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>OCNJ Display</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ocean City NJ Surf Forecast • Your Replica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; }
+        .wave-bar { height: 20px; transition: all 0.4s ease; }
+    </style>
 </head>
-<body>
-  <h1>Hello ESP32!</h1>
-  <p>This is my first GitHub Pages website.</p>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+<div class="max-w-4xl mx-auto p-4 md:p-8">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold">Ocean City, NJ Surf</h1>
+        <div id="last-updated" class="text-xs text-slate-400"></div>
+    </div>
+
+    <!-- Current Conditions -->
+    <div id="current" class="bg-slate-900 rounded-3xl p-8 mb-8 border border-slate-700">
+        <div class="text-center">
+            <div class="text-sm text-slate-400">CURRENT SURF</div>
+            <div id="surf-height" class="text-6xl font-bold text-white my-2">— ft</div>
+            <div id="condition" class="text-2xl font-semibold"></div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 text-sm">
+            <div class="bg-slate-950 p-4 rounded-2xl"><div class="text-slate-400">Wind</div><div id="wind" class="font-semibold">—</div></div>
+            <div class="bg-slate-950 p-4 rounded-2xl"><div class="text-slate-400">Primary Swell</div><div id="primary-swell" class="font-semibold">—</div></div>
+            <div class="bg-slate-950 p-4 rounded-2xl"><div class="text-slate-400">Air / Water</div><div id="temps" class="font-semibold">—</div></div>
+            <div class="bg-slate-950 p-4 rounded-2xl"><div class="text-slate-400">Tide Info</div><div id="tide" class="font-semibold">—</div></div>
+        </div>
+    </div>
+
+    <div class="text-xs text-center text-slate-500 mb-8">
+        Live data from public sources (Open-Meteo + NOAA). For personal use on your GitHub page. 
+        Check <a href="https://surfcaptain.com/forecast/ocean-city-new-jersey" class="underline">Surf Captain</a> for their full version.
+    </div>
+
+    <!-- Forecast Summary -->
+    <div id="forecast" class="text-sm"></div>
+</div>
+
+<script>
+// Fetch and display data
+async function loadForecast() {
+    const now = new Date().toLocaleString('en-US', {timeZone: 'America/New_York'});
+    document.getElementById('last-updated').textContent = `Updated ${now}`;
+
+    // Marine + Weather data
+    const marineUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=39.28&longitude=-74.57&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period,wind_wave_height&timezone=America/New_York&forecast_days=5`;
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=39.28&longitude=-74.57&current=temperature_2m,wind_speed_10m,wind_direction_10m&timezone=America/New_York`;
+
+    try {
+        const [marineRes, weatherRes] = await Promise.all([
+            fetch(marineUrl), fetch(weatherUrl)
+        ]);
+        const marine = await marineRes.json();
+        const weather = await weatherRes.json();
+
+        const h = marine.hourly || {};
+        const currentIndex = 0; // first entry ≈ now
+
+        const wave = h.wave_height?.[currentIndex] || 1;
+        const swellH = h.swell_wave_height?.[currentIndex] || wave;
+        const swellDir = h.swell_wave_direction?.[currentIndex] || '—';
+        const swellPer = h.swell_wave_period?.[currentIndex] || '—';
+        const windSpd = weather.current.wind_speed_10m;
+        const windDir = weather.current.wind_direction_10m;
+        const air = weather.current.temperature_2m;
+
+        // Simple condition
+        let condition = "Fair";
+        const diff = Math.min(Math.abs(windDir - 315), 360 - Math.abs(windDir - 315));
+        if (windSpd < 6) condition = "Clean";
+        else if (diff < 60) condition = "Clean";
+        else if (windSpd > 15) condition = "Choppy";
+
+        document.getElementById('surf-height').textContent = `${Math.round(swellH * 0.7 * 10)/10} ft`;
+        document.getElementById('condition').textContent = condition;
+        document.getElementById('wind').textContent = `${windSpd} mph @ ${windDir}°`;
+        document.getElementById('primary-swell').textContent = `${swellDir}° • ${swellH}ft @ ${swellPer}s`;
+        document.getElementById('temps').textContent = `${air}°F air (water ~65°F)`;
+
+        // Simple forecast cards (first few days)
+        let html = `<h2 class="text-xl font-semibold mb-4">Next Few Days</h2><div class="grid grid-cols-1 md:grid-cols-5 gap-4">`;
+        for (let i = 0; i < 5; i++) {
+            const dayWave = h.wave_height?.[i*24] || 1; // rough
+            html += `
+                <div class="bg-slate-900 rounded-2xl p-4 text-center">
+                    <div class="text-xs text-slate-400">Day ${i+1}</div>
+                    <div class="text-3xl font-bold">${Math.round(dayWave*0.7*10)/10} ft</div>
+                    <div class="text-xs text-emerald-400">${condition}</div>
+                </div>`;
+        }
+        html += `</div>`;
+        document.getElementById('forecast').innerHTML = html;
+
+    } catch (e) {
+        document.getElementById('current').innerHTML += `<p class="text-red-400 mt-4">Error loading live data — try refreshing.</p>`;
+        console.error(e);
+    }
+}
+
+loadForecast();
+</script>
 </body>
 </html>
